@@ -155,3 +155,6 @@ def main():
     send_command(ser, "write memory", wait=5)
     ser.close()
     print("Ferdig! Test med: ssh <brukernavn>@<mgmt-ip>")
+
+if __name__ == "__main__":
+    main()
