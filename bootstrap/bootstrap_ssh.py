@@ -55,17 +55,30 @@ def get_user_input():
 
 def send_command(ser, command, wait=1):
     """Sender én kommando og returnerer det enheten svarte."""
-    # TODO: skriv kommandoen som bytes med "\r" på slutten,
-    #       vent litt, les det som ligger i bufferet og returner det som tekst
-    pass
+    ser.write((command + "\r").encode())  # IOS forventer Enter (\r) etter hver kommando
+    time.sleep(wait)                       # gi enheten tid til å svare
+    output = ser.read(ser.in_waiting).decode(errors="ignore")
+    return output
 
 
 def prepare_device(ser):
-    """Vekker enheten, hopper over initial dialog og går til enable-modus."""
-    # TODO: send tom linje, sjekk svaret:
-    #   - "initial configuration dialog" -> svar "no"
-    #   - prompt slutter på ">" -> send "enable"
-    pass
+    """Vekker enheten, hopper over initial dialog og går til privileged EXEC (#)."""
+    for _ in range(10):  # maks 10 forsøk, så scriptet ikke henger for alltid
+        output = send_command(ser, "", wait=2)
+
+        if "initial configuration dialog" in output:
+            send_command(ser, "no", wait=5)
+        elif "terminate autoinstall" in output:
+            send_command(ser, "yes", wait=5)
+        elif "(config" in output:
+            send_command(ser, "end")          # står i config-modus fra før
+        elif output.strip().endswith(">"):
+            send_command(ser, "enable")
+        elif output.strip().endswith("#"):
+            send_command(ser, "terminal length 0")  # slå av --More--
+            return True
+
+    return False
 
 
 def build_commands(cfg):
@@ -108,9 +121,37 @@ def build_commands(cfg):
 
 def main():
     cfg = get_user_input()
+
+    try:
+        ser = serial.Serial(port=cfg["port"], baudrate=9600, timeout=1)
+    except serial.SerialException as e:
+        print(f"Klarte ikke å åpne {cfg['port']}: {e}")
+        return
+
+    print("Kobler til enheten...")
+    if not prepare_device(ser):
+        print("Fikk ikke kontakt med enheten eller kom ikke til enable-modus.")
+        ser.close()
+        return
+
     for cmd in build_commands(cfg):
-        print(cmd)
+        # Skjul passord i det som vises på skjermen
+        shown = "*** (kommando med passord skjult)" if "secret" in cmd else cmd
+        print(f"> {shown}")
 
+        # RSA-nøkkel tar tid, og kan spørre om å erstatte en eksisterende nøkkel
+        if cmd.startswith("crypto key"):
+            output = send_command(ser, cmd, wait=10)
+            if "yes/no" in output:
+                output = send_command(ser, "yes", wait=10)
+        else:
+            output = send_command(ser, cmd)
 
-if __name__ == "__main__":
-    main()
+        # IOS markerer feil med %
+        if "% Invalid" in output or "% Incomplete" in output:
+            print(f"  FEIL: {output.strip()}")
+
+    print("Lagrer konfigurasjon...")
+    send_command(ser, "write memory", wait=5)
+    ser.close()
+    print("Ferdig! Test med: ssh <brukernavn>@<mgmt-ip>")
