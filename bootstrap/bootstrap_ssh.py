@@ -6,6 +6,16 @@ import time
 from getpass import getpass
 
 
+# IOS-meldinger som betyr at en kommando feilet
+ERROR_PATTERNS = [
+    "% Invalid",
+    "% Incomplete",
+    "% Ambiguous",
+    "% Unknown",
+    "% Please",
+]
+
+
 def ask(prompt, secret=False):
     """Spør til brukeren gir et svar som ikke er tomt."""
     while True:
@@ -88,7 +98,7 @@ def build_commands(cfg):
     # Felles for switch og ruter
     commands += [
         f"hostname {cfg['hostname']}",
-        f"ip domain-name {cfg['domain']}",
+        f"ip domain name {cfg['domain']}",
         f"enable secret {cfg['enable_secret']}",
         f"username {cfg['username']} privilege 15 secret {cfg['password']}",
         "crypto key generate rsa modulus 2048",
@@ -148,8 +158,9 @@ def main():
             output = send_command(ser, cmd)
 
         # IOS markerer feil med %
-        if "% Invalid" in output or "% Incomplete" in output:
+        if any(pattern in output for pattern in ERROR_PATTERNS):
             print(f"  FEIL: {output.strip()}")
+            
 
     print("Lagrer konfigurasjon...")
     send_command(ser, "write memory", wait=5)
