@@ -3,8 +3,11 @@ Bootstrap-script: setter opp SSH på Cisco switch/ruter via konsoll (pyserial).
 """
 import serial
 import time
+import ipaddress
 from getpass import getpass
 
+# Sett til True for å se hva enheten svarer under tilkobling
+DEBUG = False
 
 # IOS-meldinger som betyr at en kommando feilet
 ERROR_PATTERNS = [
@@ -16,6 +19,8 @@ ERROR_PATTERNS = [
 ]
 
 
+# ---------- Input fra bruker ----------
+
 def ask(prompt, secret=False):
     """Spør til brukeren gir et svar som ikke er tomt."""
     while True:
@@ -23,6 +28,28 @@ def ask(prompt, secret=False):
         if answer.strip():
             return answer.strip()
         print("Feltet kan ikke være tomt, prøv igjen.")
+
+
+def ask_ip(prompt):
+    """Spør til brukeren gir en gyldig IPv4-adresse."""
+    while True:
+        answer = ask(prompt)
+        try:
+            ipaddress.IPv4Address(answer)
+            return answer
+        except ipaddress.AddressValueError:
+            print("Ugyldig IP-adresse, prøv igjen.")
+
+
+def ask_mask(prompt):
+    """Spør til brukeren gir en gyldig subnettmaske."""
+    while True:
+        answer = ask(prompt)
+        try:
+            ipaddress.IPv4Network(f"0.0.0.0/{answer}")
+            return answer
+        except ValueError:
+            print("Ugyldig subnettmaske, prøv igjen.")
 
 
 def get_user_input():
@@ -53,15 +80,17 @@ def get_user_input():
         cfg["mgmt_interface"] = ask("Management-interface (f.eks. vlan 99): ")
     else:
         cfg["mgmt_interface"] = ask("Management-interface (f.eks. g0/0/0): ")
-    cfg["mgmt_ip"] = ask("Management-IP: ")
-    cfg["mgmt_mask"] = ask("Subnettmaske: ")
+    cfg["mgmt_ip"] = ask_ip("Management-IP: ")
+    cfg["mgmt_mask"] = ask_mask("Subnettmaske: ")
 
     # Default gateway trengs bare på switch (ruteren har rutetabell)
     if cfg["device_type"] == "switch":
-        cfg["gateway"] = ask("Default gateway: ")
+        cfg["gateway"] = ask_ip("Default gateway: ")
 
     return cfg
 
+
+# ---------- Kommunikasjon med enheten ----------
 
 def send_command(ser, command, wait=1):
     """Sender én kommando og returnerer det enheten svarte."""
@@ -70,6 +99,7 @@ def send_command(ser, command, wait=1):
     output = ser.read(ser.in_waiting).decode(errors="ignore")
     return output
 
+
 def last_line(output):
     """Returnerer siste linje som ikke er en loggmelding (de starter med *)."""
     lines = [line.strip() for line in output.splitlines()
@@ -77,11 +107,12 @@ def last_line(output):
     return lines[-1] if lines else ""
 
 
-def prepare_device(ser):
+def prepare_device(ser, enable_secret):
     """Vekker enheten, hopper over initial dialog og går til privileged EXEC (#)."""
     for _ in range(20):  # IOS-XE er treg og bråkete etter boot, så vi gir den flere forsøk
         output = send_command(ser, "", wait=2)
-        print(f"[debug] {output!r}")
+        if DEBUG:
+            print(f"[debug] {output!r}")
         prompt = last_line(output)
 
         if "initial configuration dialog" in output:
@@ -89,15 +120,23 @@ def prepare_device(ser):
         elif "terminate autoinstall" in output:
             send_command(ser, "yes", wait=5)
         elif "(config" in prompt:
-            send_command(ser, "end")            # står i config-modus fra før
+            send_command(ser, "end")                # står i config-modus fra før
         elif prompt.endswith(">"):
-            send_command(ser, "enable")
+            # Enheten kan ha enable secret fra en tidligere kjøring
+            output = send_command(ser, "enable", wait=2)
+            if "Password" in output:
+                output = send_command(ser, enable_secret, wait=2)
+                if "Bad secret" in output or "Access denied" in output:
+                    print("Enheten avviste enable secret. Har den et annet passord fra før?")
+                    return False
         elif prompt.endswith("#"):
             send_command(ser, "terminal length 0")  # slå av --More--
             return True
 
     return False
 
+
+# ---------- Konfigurasjon ----------
 
 def build_commands(cfg):
     """Lager kommandolisten ut fra enhetstype og input."""
@@ -137,6 +176,8 @@ def build_commands(cfg):
     return commands
 
 
+# ---------- Hovedprogram ----------
+
 def main():
     cfg = get_user_input()
 
@@ -147,8 +188,9 @@ def main():
         return
 
     print("Kobler til enheten...")
-    if not prepare_device(ser):
+    if not prepare_device(ser, cfg["enable_secret"]):
         print("Fikk ikke kontakt med enheten eller kom ikke til enable-modus.")
+        print("Tips: sett DEBUG = True øverst i fila for å se hva enheten svarer.")
         ser.close()
         return
 
@@ -165,15 +207,15 @@ def main():
         else:
             output = send_command(ser, cmd)
 
-        # IOS markerer feil med %
+        # Sjekk om IOS avviste kommandoen
         if any(pattern in output for pattern in ERROR_PATTERNS):
             print(f"  FEIL: {output.strip()}")
-            
 
     print("Lagrer konfigurasjon...")
     send_command(ser, "write memory", wait=5)
     ser.close()
     print("Ferdig! Test med: ssh <brukernavn>@<mgmt-ip>")
+
 
 if __name__ == "__main__":
     main()
