@@ -70,21 +70,29 @@ def send_command(ser, command, wait=1):
     output = ser.read(ser.in_waiting).decode(errors="ignore")
     return output
 
+def last_line(output):
+    """Returnerer siste linje som ikke er en loggmelding (de starter med *)."""
+    lines = [line.strip() for line in output.splitlines()
+             if line.strip() and not line.strip().startswith("*")]
+    return lines[-1] if lines else ""
+
 
 def prepare_device(ser):
     """Vekker enheten, hopper over initial dialog og går til privileged EXEC (#)."""
-    for _ in range(10):  # maks 10 forsøk, så scriptet ikke henger for alltid
+    for _ in range(20):  # IOS-XE er treg og bråkete etter boot, så vi gir den flere forsøk
         output = send_command(ser, "", wait=2)
+        print(f"[debug] {output!r}")
+        prompt = last_line(output)
 
         if "initial configuration dialog" in output:
             send_command(ser, "no", wait=5)
         elif "terminate autoinstall" in output:
             send_command(ser, "yes", wait=5)
-        elif "(config" in output:
-            send_command(ser, "end")          # står i config-modus fra før
-        elif output.strip().endswith(">"):
+        elif "(config" in prompt:
+            send_command(ser, "end")            # står i config-modus fra før
+        elif prompt.endswith(">"):
             send_command(ser, "enable")
-        elif output.strip().endswith("#"):
+        elif prompt.endswith("#"):
             send_command(ser, "terminal length 0")  # slå av --More--
             return True
 
