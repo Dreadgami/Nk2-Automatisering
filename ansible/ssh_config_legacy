@@ -1,0 +1,5 @@
+# Eldre Cisco IOS (2901, 2960, Catalyst 1000) støtter bare SHA-1 for nøkkelutveksling og ssh-rsa som vertsnøkkel. Moderne SSH.klienter har slått dette av som standard.
+# Vi tillater det KUN for disse adressene.
+Host 172.16.2.6 172.16.10.11 172.16.10.12
+	KexAlgorithms +diffie-hellman-group14-sha1
+	HostKeyAlgorithms +ssh-rsa
