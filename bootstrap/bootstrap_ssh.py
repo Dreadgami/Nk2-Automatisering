@@ -17,6 +17,7 @@ ERROR_PATTERNS = [
     "% Ambiguous",
     "% Unknown",
     "% Please",
+    "overlaps",   # f.eks. "% 172.16.10.0 overlaps with Vlan1"
 ]
 
 
@@ -30,6 +31,16 @@ def ask(prompt, secret=False, optional=False):
         if answer or optional:
             return answer
         print("Feltet kan ikke være tomt, prøv igjen.")
+
+
+def ask_secret(prompt):
+    """Spør om passord to ganger, slik at en skrivefeil ikke blir lagret uten at man merker det."""
+    while True:
+        first = ask(prompt, secret=True)
+        second = ask("Gjenta for å bekrefte: ", secret=True)
+        if first == second:
+            return first
+        print("Passordene var ikke like, prøv igjen.")
 
 
 def ask_ip(prompt, optional=False):
@@ -75,10 +86,10 @@ def get_user_input():
     cfg["hostname"] = ask("Hostname: ")
     cfg["domain"] = ask("Domenenavn (f.eks. lab.local): ")
 
-    # Innlogging
+    # Innlogging (passord bekreftes, fordi getpass ikke viser hva man skriver)
     cfg["username"] = ask("Brukernavn for SSH: ")
-    cfg["password"] = ask("Passord for SSH-bruker: ", secret=True)
-    cfg["enable_secret"] = ask("Enable secret: ", secret=True)
+    cfg["password"] = ask_secret("Passord for SSH-bruker: ")
+    cfg["enable_secret"] = ask_secret("Enable secret: ")
 
     # Management-interface
     # Switch: SVI (vlan X) eller routed port på multilayer-switch (g1/0/3)
@@ -185,6 +196,11 @@ def build_commands(cfg):
 
     # Switch med SVI: VLAN-et og portene må finnes før SVI-en kan komme opp
     if is_switch and cfg["mgmt_vlan"]:
+        # En blank switch har "ip address dhcp" på Vlan1. Får den en adresse i samme
+        # nett som mgmt-VLAN-et, nekter IOS å gi mgmt-SVI-en IP ("overlaps with Vlan1").
+        if cfg["mgmt_vlan"] != "1":
+            commands += ["interface vlan 1", "no ip address", "shutdown", "exit"]
+
         commands += [f"vlan {cfg['mgmt_vlan']}", "exit"]
         if cfg["access_ports"]:
             commands += [
