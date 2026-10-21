@@ -1,0 +1,10 @@
+# Felles for begge rutere: VLAN 10 er STUD1 sitt VLAN.
+# Begge rutere står i VLAN 10, deler HSRP-gateway og deler ut DHCP fra hver sin del av nettet.
+lan_mask: 255.255.255.0
+
+hsrp_group: 10
+hsrp_vip: 172.16.10.254
+
+dhcp_pool_name: VLAN10
+dhcp_network: 172.16.10.0
+dhcp_mask: 255.255.255.0

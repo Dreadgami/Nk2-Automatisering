@@ -1,0 +1,10 @@
+# Cisco 4221 – HSRP Active for VLAN 10
+lan_interface: GigabitEthernet0/0/0
+lan_description: VLAN10 - ned mot SW3 Fa0/3
+lan_ip: 172.16.10.1
+hsrp_priority: 110
+
+# R1 deler ut .20-.129 (alt annet utelukkes)
+dhcp_excluded:
+  - [172.16.10.1, 172.16.10.19]
+  - [172.16.10.130, 172.16.10.254]

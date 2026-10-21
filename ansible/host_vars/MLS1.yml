@@ -1,0 +1,19 @@
+# Catalyst 3650 – ruter mellom MGMT-nettet og de to ruterne
+routed_ports:
+  - name: GigabitEthernet1/0/1
+    description: Til R1 Gi0/0/1
+    ip: 172.16.2.1
+    mask: 255.255.255.252
+  - name: GigabitEthernet1/0/2
+    description: Til R2 Gi0/1
+    ip: 172.16.2.5
+    mask: 255.255.255.252
+
+# VLAN 10 nås via begge rutere (to like ruter = lastdeling og redundans)
+static_routes:
+  - prefix: 172.16.10.0
+    mask: 255.255.255.0
+    next_hop: 172.16.2.2
+  - prefix: 172.16.10.0
+    mask: 255.255.255.0
+    next_hop: 172.16.2.6

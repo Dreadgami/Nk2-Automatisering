@@ -1,6 +1,10 @@
-# Felles tilkoblingsinnstillinger for alle Cisco-enheter
+# Felles tilkoblingsinnstillinger for alle Cisco-enheter.
+# Passord ligger IKKE her (offentlig repo): oppgis med -k (SSH) og -K (enable).
 ansible_connection: ansible.netcommon.network_cli
 ansible_network_os: cisco.ios.ios
 ansible_user: momo
 ansible_become: true
 ansible_become_method: enable
+
+domain_name: lab.local
+dns_server: 8.8.8.8

@@ -1,0 +1,10 @@
+# Cisco 2901 – HSRP Standby for VLAN 10
+lan_interface: GigabitEthernet0/0
+lan_description: VLAN10 - ned mot SW3 Fa0/4
+lan_ip: 172.16.10.2
+hsrp_priority: 100
+
+# R2 deler ut .130-.249 (alt annet utelukkes)
+dhcp_excluded:
+  - [172.16.10.1, 172.16.10.129]
+  - [172.16.10.250, 172.16.10.254]

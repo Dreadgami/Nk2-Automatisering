@@ -1,0 +1,53 @@
+# Aksess-switcher: VLAN-er, access-porter, trunker og EtherChannel.
+- name: Konfigurer switcher
+  hosts: switches
+  gather_facts: false
+  tasks:
+    - name: Opprett VLAN-er
+      cisco.ios.ios_vlans:
+        config: "{{ vlans }}"
+        state: merged
+
+    - name: Access-porter
+      cisco.ios.ios_config:
+        parents: "interface {{ item.name }}"
+        lines:
+          - "description {{ item.description }}"
+          - switchport mode access
+          - "switchport access vlan {{ item.vlan }}"
+          - spanning-tree portfast
+          - no shutdown
+      loop: "{{ access_ports | default([]) }}"
+
+    - name: Trunk-porter
+      cisco.ios.ios_config:
+        parents: "interface {{ item.name }}"
+        lines:
+          - "description {{ item.description }}"
+          - switchport mode trunk
+          - "switchport trunk allowed vlan {{ item.allowed }}"
+          - no shutdown
+      loop: "{{ trunk_ports | default([]) }}"
+
+    - name: EtherChannel – medlemsporter (LACP)
+      cisco.ios.ios_config:
+        parents: "interface {{ item }}"
+        lines:
+          - "channel-group {{ etherchannel.id }} mode {{ etherchannel.mode }}"
+          - no shutdown
+      loop: "{{ etherchannel.members }}"
+      when: etherchannel is defined
+
+    - name: EtherChannel – Port-channel som trunk
+      cisco.ios.ios_config:
+        parents: "interface Port-channel{{ etherchannel.id }}"
+        lines:
+          - "description {{ etherchannel.description }}"
+          - switchport mode trunk
+          - "switchport trunk native vlan {{ etherchannel.native }}"
+          - "switchport trunk allowed vlan {{ etherchannel.allowed }}"
+      when: etherchannel is defined
+
+    - name: Lagre konfigurasjon
+      cisco.ios.ios_config:
+        save_when: modified

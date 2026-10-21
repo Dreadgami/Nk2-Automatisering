@@ -1,0 +1,35 @@
+# Ruterne: LAN-interface i VLAN 10, HSRP-gateway og DHCP.
+- name: Konfigurer rutere
+  hosts: routers
+  gather_facts: false
+  tasks:
+    - name: LAN-interface med HSRP
+      cisco.ios.ios_config:
+        parents: "interface {{ lan_interface }}"
+        lines:
+          - "description {{ lan_description }}"
+          - "ip address {{ lan_ip }} {{ lan_mask }}"
+          - standby version 2
+          - "standby {{ hsrp_group }} ip {{ hsrp_vip }}"
+          - "standby {{ hsrp_group }} priority {{ hsrp_priority }}"
+          - "standby {{ hsrp_group }} preempt"
+          - no shutdown
+
+    - name: Adresser DHCP ikke skal dele ut
+      cisco.ios.ios_config:
+        lines:
+          - "ip dhcp excluded-address {{ item[0] }} {{ item[1] }}"
+      loop: "{{ dhcp_excluded }}"
+
+    - name: DHCP-pool for VLAN 10
+      cisco.ios.ios_config:
+        parents: "ip dhcp pool {{ dhcp_pool_name }}"
+        lines:
+          - "network {{ dhcp_network }} {{ dhcp_mask }}"
+          - "default-router {{ hsrp_vip }}"
+          - "dns-server {{ dns_server }}"
+          - "domain-name {{ domain_name }}"
+
+    - name: Lagre konfigurasjon
+      cisco.ios.ios_config:
+        save_when: modified

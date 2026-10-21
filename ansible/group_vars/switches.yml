@@ -1,0 +1,8 @@
+# VLAN-er som skal finnes på alle switcher (avtalt med STUD2)
+vlans:
+  - vlan_id: 10
+    name: VLAN10
+  - vlan_id: 20
+    name: VLAN20
+  - vlan_id: 999
+    name: NATIVE

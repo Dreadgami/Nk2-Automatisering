@@ -1,0 +1,40 @@
+# Viser status for verifisering (ingen endringer).
+- name: Verifiser multilayer-switch
+  hosts: mls
+  gather_facts: false
+  tasks:
+    - name: Ruting
+      cisco.ios.ios_command:
+        commands:
+          - show ip interface brief
+          - show ip route static
+      register: out
+    - ansible.builtin.debug:
+        var: out.stdout_lines
+
+- name: Verifiser rutere
+  hosts: routers
+  gather_facts: false
+  tasks:
+    - name: HSRP og DHCP
+      cisco.ios.ios_command:
+        commands:
+          - show standby brief
+          - show ip dhcp binding
+      register: out
+    - ansible.builtin.debug:
+        var: out.stdout_lines
+
+- name: Verifiser switcher
+  hosts: switches
+  gather_facts: false
+  tasks:
+    - name: VLAN, trunker og EtherChannel
+      cisco.ios.ios_command:
+        commands:
+          - show vlan brief
+          - show interfaces trunk
+          - show etherchannel summary
+      register: out
+    - ansible.builtin.debug:
+        var: out.stdout_lines

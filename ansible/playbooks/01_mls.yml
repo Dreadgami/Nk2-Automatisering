@@ -1,0 +1,30 @@
+# Multilayer-switch: slår på ruting og setter opp routed porter mot ruterne.
+# Må kjøres først – uten denne når ikke MGMT-PC-en ruterne.
+- name: Konfigurer multilayer-switch
+  hosts: mls
+  gather_facts: false
+  tasks:
+    - name: Slå på IP-ruting
+      cisco.ios.ios_config:
+        lines:
+          - ip routing
+
+    - name: Routed porter mot ruterne
+      cisco.ios.ios_config:
+        parents: "interface {{ item.name }}"
+        lines:
+          - "description {{ item.description }}"
+          - no switchport
+          - "ip address {{ item.ip }} {{ item.mask }}"
+          - no shutdown
+      loop: "{{ routed_ports }}"
+
+    - name: Statiske ruter
+      cisco.ios.ios_config:
+        lines:
+          - "ip route {{ item.prefix }} {{ item.mask }} {{ item.next_hop }}"
+      loop: "{{ static_routes }}"
+
+    - name: Lagre konfigurasjon
+      cisco.ios.ios_config:
+        save_when: modified

@@ -1,0 +1,5 @@
+# Kjører hele oppsettet i riktig rekkefølge:
+# MLS først (gjør ruterne nåbare), så ruterne (gjør switchene nåbare), så switchene.
+- import_playbook: 01_mls.yml
+- import_playbook: 02_routers.yml
+- import_playbook: 03_switches.yml

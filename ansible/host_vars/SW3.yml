@@ -1,0 +1,13 @@
+# Catalyst 2960 (øvre aksess-switch)
+access_ports:
+  - name: FastEthernet0/3
+    description: Til R1 Gi0/0/0
+    vlan: 10
+  - name: FastEthernet0/4
+    description: Til R2 Gi0/0
+    vlan: 10
+
+trunk_ports:
+  - name: FastEthernet0/2
+    description: Til SW0 Gi1/0/3
+    allowed: "10"

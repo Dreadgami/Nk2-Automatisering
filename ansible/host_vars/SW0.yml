@@ -1,0 +1,24 @@
+# Catalyst 1000 (nedre aksess-switch)
+access_ports:
+  - name: GigabitEthernet1/0/1
+    description: PC VLAN10_1
+    vlan: 10
+  - name: GigabitEthernet1/0/2
+    description: PC VLAN20_2
+    vlan: 20
+
+trunk_ports:
+  - name: GigabitEthernet1/0/3
+    description: Til SW3 Fa0/2
+    allowed: "10"
+
+# EtherChannel mot STUD2 (avtalt: LACP, Po1, trunk 10,20, native 999)
+etherchannel:
+  id: 1
+  mode: active
+  description: EtherChannel til STUD2
+  members:
+    - GigabitEthernet1/0/4
+    - GigabitEthernet1/0/5
+  allowed: "10,20"
+  native: 999
