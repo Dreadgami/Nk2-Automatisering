@@ -2,8 +2,8 @@
 
 Automatisert oppsett av Cisco-utstyr i to steg:
 
-1. **[Del 1 – Python via konsoll](bootstrap/README.md):** `bootstrap_ssh.py` gir en ny eller nullstilt enhet SSH og en management-IP over konsollkabel.
-2. **[Del 2 – Ansible over SSH](ansible/README.md):** playbooks setter opp ruting, VLAN, trunker, EtherChannel, HSRP og DHCP.
+1. **[Del 1 – Python via konsoll](bootstrap/README%20Del1.md):** `bootstrap_ssh.py` gir en ny eller nullstilt enhet SSH og en management-IP over konsollkabel.
+2. **[Del 2 – Ansible over SSH](README%20Del2.md):** playbooks setter opp ruting, VLAN, trunker, EtherChannel, HSRP og DHCP.
 
 Python får enheten på nett, og Ansible gjør selve konfigurasjonen.
 
