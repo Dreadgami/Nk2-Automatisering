@@ -190,5 +190,5 @@ Med mer tid ville jeg ha:
 * lagt passordene i Ansible Vault, slik at playbookene kan kjøres uten å spørre (i dag oppgis de med `-k`/`-K` og lagres ikke)
 * utvidet `verify.yml` til å sjekke resultatet automatisk (for eksempel at R1 er HSRP Active), ikke bare vise det
 * samlet Python og Ansible i ett startscript, slik at hele oppsettet kjøres med en kommando
-* i bootstrap-scriptet: bekreftelse av passord, `overlaps` som feilmelding, og `Vlan1` slått av automatisk
+* teste de siste forbedringene i bootstrap-scriptet på utstyret (bekreftelse av passord, `overlaps` som feilmelding og `Vlan1` slått av automatisk). De ble lagt inn etter labtiden og er ikke kjørt mot enhetene ennå.
 
