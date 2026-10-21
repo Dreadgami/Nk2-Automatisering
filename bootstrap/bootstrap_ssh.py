@@ -1,5 +1,6 @@
 """
 Bootstrap-script: setter opp SSH på Cisco switch/ruter via konsoll (pyserial).
+Gir enheten akkurat nok konfig til at Ansible kan nå den over SSH.
 """
 import serial
 import time
@@ -21,19 +22,22 @@ ERROR_PATTERNS = [
 
 # ---------- Input fra bruker ----------
 
-def ask(prompt, secret=False):
-    """Spør til brukeren gir et svar som ikke er tomt."""
+def ask(prompt, secret=False, optional=False):
+    """Spør brukeren. Tomt svar er bare lov når optional=True (returnerer da "")."""
     while True:
         answer = getpass(prompt) if secret else input(prompt)
-        if answer.strip():
-            return answer.strip()
+        answer = answer.strip()
+        if answer or optional:
+            return answer
         print("Feltet kan ikke være tomt, prøv igjen.")
 
 
-def ask_ip(prompt):
-    """Spør til brukeren gir en gyldig IPv4-adresse."""
+def ask_ip(prompt, optional=False):
+    """Spør til brukeren gir en gyldig IPv4-adresse (eller tomt svar hvis optional)."""
     while True:
-        answer = ask(prompt)
+        answer = ask(prompt, optional=optional)
+        if not answer:
+            return ""
         try:
             ipaddress.IPv4Address(answer)
             return answer
@@ -65,6 +69,7 @@ def get_user_input():
         if cfg["device_type"] in ("switch", "router"):
             break
         print("Skriv enten 'switch' eller 'router'.")
+    is_switch = cfg["device_type"] == "switch"
 
     # Grunnoppsett
     cfg["hostname"] = ask("Hostname: ")
@@ -75,17 +80,42 @@ def get_user_input():
     cfg["password"] = ask("Passord for SSH-bruker: ", secret=True)
     cfg["enable_secret"] = ask("Enable secret: ", secret=True)
 
-    # Management-adresse (switch bruker SVI, ruter bruker fysisk interface)
-    if cfg["device_type"] == "switch":
-        cfg["mgmt_interface"] = ask("Management-interface (f.eks. vlan 99): ")
-    else:
-        cfg["mgmt_interface"] = ask("Management-interface (f.eks. g0/0/0): ")
+    # Management-interface
+    # Switch: SVI (vlan X) eller routed port på multilayer-switch (g1/0/3)
+    # Ruter: fysisk interface (g0/0/1 på 4221, g0/1 på 2901)
+    while True:
+        if is_switch:
+            iface = ask("Management-interface (f.eks. vlan 10, eller g1/0/3 for routed port): ")
+        else:
+            iface = ask("Management-interface (f.eks. g0/0/1 eller g0/1): ")
+        cfg["mgmt_vlan"] = ""
+        if iface.lower().startswith("vlan"):
+            vlan_id = iface.lower().replace("vlan", "").strip()
+            if not vlan_id.isdigit():
+                print("Skriv VLAN-interfacet som f.eks. 'vlan 10'.")
+                continue
+            cfg["mgmt_vlan"] = vlan_id
+        cfg["mgmt_interface"] = iface
+        break
+
     cfg["mgmt_ip"] = ask_ip("Management-IP: ")
     cfg["mgmt_mask"] = ask_mask("Subnettmaske: ")
 
-    # Default gateway trengs bare på switch (ruteren har rutetabell)
-    if cfg["device_type"] == "switch":
-        cfg["gateway"] = ask_ip("Default gateway: ")
+    # Gateway: switch bruker default-gateway, ruter får en default route
+    if is_switch:
+        cfg["gateway"] = ask_ip("Default gateway (Enter for å hoppe over): ", optional=True)
+    else:
+        cfg["gateway"] = ask_ip("Default route next-hop (Enter for å hoppe over): ", optional=True)
+
+    # Switch med SVI: hvilke porter som skal bære mgmt-VLAN-et
+    cfg["access_ports"] = ""
+    cfg["trunk_ports"] = ""
+    if is_switch and cfg["mgmt_vlan"]:
+        cfg["access_ports"] = ask(
+            f"Access-porter i VLAN {cfg['mgmt_vlan']} (f.eks. fa0/3 - 4, Enter for ingen): ",
+            optional=True)
+        cfg["trunk_ports"] = ask(
+            "Trunk-porter (f.eks. fa0/2, Enter for ingen): ", optional=True)
 
     return cfg
 
@@ -140,6 +170,7 @@ def prepare_device(ser, enable_secret):
 
 def build_commands(cfg):
     """Lager kommandolisten ut fra enhetstype og input."""
+    is_switch = cfg["device_type"] == "switch"
     commands = ["configure terminal"]
 
     # Felles for switch og ruter
@@ -152,17 +183,41 @@ def build_commands(cfg):
         "ip ssh version 2",
     ]
 
+    # Switch med SVI: VLAN-et og portene må finnes før SVI-en kan komme opp
+    if is_switch and cfg["mgmt_vlan"]:
+        commands += [f"vlan {cfg['mgmt_vlan']}", "exit"]
+        if cfg["access_ports"]:
+            commands += [
+                f"interface range {cfg['access_ports']}",
+                "switchport mode access",
+                f"switchport access vlan {cfg['mgmt_vlan']}",
+                "no shutdown",
+                "exit",
+            ]
+        if cfg["trunk_ports"]:
+            commands += [
+                f"interface range {cfg['trunk_ports']}",
+                "switchport mode trunk",
+                "no shutdown",
+                "exit",
+            ]
+
     # Management-interface
+    commands.append(f"interface {cfg['mgmt_interface']}")
+    if is_switch and not cfg["mgmt_vlan"]:
+        commands.append("no switchport")  # routed port på multilayer-switch (3650)
     commands += [
-        f"interface {cfg['mgmt_interface']}",
         f"ip address {cfg['mgmt_ip']} {cfg['mgmt_mask']}",
         "no shutdown",
         "exit",
     ]
 
-    # Switch-spesifikt: default gateway (switchen ruter ikke selv)
-    if cfg["device_type"] == "switch":
-        commands.append(f"ip default-gateway {cfg['gateway']}")
+    # Gateway: switch -> default-gateway, ruter -> default route
+    if cfg["gateway"]:
+        if is_switch:
+            commands.append(f"ip default-gateway {cfg['gateway']}")
+        else:
+            commands.append(f"ip route 0.0.0.0 0.0.0.0 {cfg['gateway']}")
 
     # VTY-linjer: kun SSH, logg inn med lokal bruker
     commands += [
